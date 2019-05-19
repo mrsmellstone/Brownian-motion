@@ -1,4 +1,14 @@
-#ifndef NBODYSCENE_H
-#define NBODYSCENE_H
+#ifndef NBODY_NBODYSCENE_HPP
+#define NBODY_NBODYSCENE_HPP
 
-#endif // NBODYSCENE_H
+#include "GLBall.h"
+
+class NBodyScene {
+public:
+    virtual ~NBodyScene() = default;
+    virtual unsigned int getNumberOfBodies() const = 0;
+    virtual const GLBall& getBody(unsigned int number) const = 0;
+    virtual void doTimeStep() = 0;
+};
+
+#endif //NBODY_NBODYSCENE_HPP

@@ -1,93 +1,153 @@
-#include <iostream>
-#include <vector>
+#include "GLBall.h"
+#include "NBodyScene.h"
+
 #include <cmath>
-#include <cstdlib>
+#include <vector>
 
-using namespace std;
 
-struct Vec2D{
+class SampleBall : public GLBall {
 protected:
-    double pos[2];
+    double vx;
+    double vy;
+    double x;
+    double y;
+    double r;
+
 public:
+    // Конструктор *ваш* - что нужно, то в нём и получаете.
+    // Копировать этот конструктор *не* надо.
+    SampleBall(double x, double y, double r, double vx, double vy)
+            : x(x), y(y), r(r), vx(vx), vy(vy) {}
 
-    Vec2D(double x = 0, double y = 0){
-        pos[0] = x;
-        pos[1] = y;
-    }
-    double& operator[](int i){
-        return pos[i];
-    }
-    double abs()const{
-        return sqrt(pos[0] * pos[0] + pos[1] * pos[1]);
-    }
-
-    friend Vec2D operator+(Vec2D vec1, Vec2D vec2){
-        return Vec2D(vec1[0] + vec2[0], vec1[1] + vec2[1]);
-    }
-    friend Vec2D operator-(Vec2D vec1, Vec2D vec2){
-        return Vec2D(vec1[0] - vec2[0], vec1[1] - vec2[1]);
-    }
-    friend Vec2D operator*(double num, Vec2D vec1){
-        return Vec2D(num * vec1[0], num * vec1[1]);
-    }
-    friend Vec2D operator*(Vec2D vec1, double num){
-        return Vec2D(num * vec1[0], num * vec1[1]);
-    }
-    friend double operator*(Vec2D vec1, Vec2D vec2){
-        return vec1[0] * vec2[0] + vec1[1] * vec2[1];
+    // Ваши методы, никак не связанные с GLBall
+    void move(double dt) {
+        x += vx * dt;
+        y += vy * dt;
     }
 
+    double getX() const override {
+        return x;
+    }
+    double getY() const override {
+        return y;
+    }
+    double getR() const override {
+        return r;
+    }
+    double& getVX(){
+        return vx;
+    }
+    double& getVY(){
+        return vy;
+    }
+    double getV() {
+        return sqrt(vx * vx + vy * vy);
+    }
+    friend double abs(SampleBall const one, SampleBall const another){
+        return sqrt((one.x - another.x) * (one.x - another.x)  + (one.y - another.y) * (one.y - another.y));
+    }
 };
 
-struct Atom{
+class SampleScene : public NBodyScene {
 protected:
-    Vec2D Pos, V;
-    double m, r;
+    std::vector<SampleBall> bodies;
+    double width, heigh;
+    double dt;
+
 public:
-    Atom(Vec2D Pos, Vec2D V, double m = 1, double r = 1):
-        Pos(Pos),
-        V(V),
-        m(m),
-        r(r)
+    
+    SampleScene(double width, double heigh):
+        width(width),
+        heigh(heigh)
     {}
-    bool is_near(Atom another){
-        Vec2D dist = another.Pos - Pos;
-        if(dist.abs() < another.r + r)
-            return true;
-        else
-            return false;
+
+    unsigned int getNumberOfBodies() const override {
+        return bodies.size();
     }
-    void correct(double width, double heigh){
-        if(Pos[0] - r < 0 || Pos[0] + r > width)
-            V[0] *= -1;
-        if(Pos[1] - r < 0 || Pos[1] + r > heigh)
-            V[1] += -1;
+
+    const GLBall& getBody(unsigned int number) const override {
+        return bodies.at(number);
+    }
+    
+    void add_ball(SampleBall add){
+        bodies.push_back(add);
+    }
+    
+    void correct_time(){
+        double max_v = 0;
+        double min_r = bodies[0].getR();
+        for(SampleBall& b : bodies){
+            if(b.getV() > max_v)
+                max_v = b.getV();
+            if(b.getR() < min_r)
+                min_r = b.getR();
+        }
+        dt = min_r / (5 * max_v);
+    }
+
+    void doTimeStep() override {
+        for(SampleBall& b : bodies)
+            b.move(dt);
+    }
+
+    double get_dt(){
+        return dt;
+    }
+
+    void initScene() {
+        bodies.push_back(SampleBall(0, 0, 10, 1, 0));
+        bodies.push_back(SampleBall(15, 15, 1, 0, 1));
+    }
+    
+    void correct_edge(){
+        for(SampleBall& b : bodies){
+            if(b.getX() - b.getR() < 0 || b.getX() + b.getR() > width)
+                b.getVX() *= -1;
+            if(b.getY() - b.getR() < 0 || b.getY() + b.getR() > heigh)
+                b.getVY() *= -1;
+        }
+    }
+    
+    void correct_fat(){
+        for(SampleBall& b : bodies){
+            if(&b != &bodies[0]){
+                double dist = abs(bodies[0], b);
+                double rad_dist = bodies[0].getR() + b.getR();
+                if(dist < rad_dist){
+            // псевдосила
+                    double F = rad_dist - dist;
+                    F *= 5000;
+                    double vec_x = b.getX() - bodies[0].getX();
+                    double vec_y = b.getY() - bodies[0].getY();
+            /* направление * (сила / масса(радиус)) * dt */
+                    b.getVX() += (vec_x / dist) * (F / b.getR()) * dt;
+                    b.getVY() += (vec_y / dist) * (F / b.getR()) * dt;
+                    bodies[0].getVX() += (-vec_x / dist) * (F / bodies[0].getR()) * dt;
+                    bodies[0].getVY() += (-vec_y / dist) * (F / bodies[0].getR()) * dt;
+                }
+            }
+        }
     }
 };
+
+NBodyScene* getScene(double width, double heigh)
+{
+    SampleScene* s = new SampleScene(width, heigh);
+    s->initScene();
+    return s;
+}
 
 int main()
 {
-    double heigh = 500, width = 500;
-    double speed_limit = 400;
-    int n = 50;
-    double r = 1, R = 20;
-    double dT = r / (2 * speed_limit);
-    double time_limit = 10;
-    Vec2D Center(width / 2, heigh / 2);
-    Vec2D Velocity;
-    Atom Bomb(Center, Velocity, 50, R);
-    vector<Atom> atoms;
-    for(int i = 0; i < n; ++i){
-        double buf_v_x = rand() % int(speed_limit / 2);
-        double buf_v_y = rand() % int(speed_limit / 2);
-        double buf_x = rand() % int(width);
-        double buf_y = rand() % int(heigh);
-        Atom buf(Vec2D(buf_x, buf_y), Vec2D(buf_v_x, buf_v_y), 1, r);
-        atoms.push_back(buf);
+    SampleScene* scene = (SampleScene*)getScene(800, 600);
+    double t = 0, Timelimit = 10;
+    while(t < Timelimit) {
+        scene->correct_time();
+        scene->correct_edge();
+        scene->correct_fat();
+        scene->doTimeStep();
+        t += scene->get_dt();
     }
-    double t = 0;
-    while(t < time_limit){
-        t += dT;
-    }
+    delete scene;
     return 0;
-}
+};

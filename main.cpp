@@ -66,7 +66,7 @@ public:
     }
 
     const GLBall& getBody(unsigned int number) const override {
-        return bodies.at(number);
+        return bodies[number];
     }
     
     void add_ball(SampleBall add){
@@ -86,6 +86,9 @@ public:
     }
 
     void doTimeStep() override {
+        correct_time();
+        correct_edge();
+        correct_fat();
         for(SampleBall& b : bodies)
             b.move(dt);
     }
@@ -142,9 +145,6 @@ int main()
     SampleScene* scene = (SampleScene*)getScene(800, 600);
     double t = 0, Timelimit = 10;
     while(t < Timelimit) {
-        scene->correct_time();
-        scene->correct_edge();
-        scene->correct_fat();
         scene->doTimeStep();
         t += scene->get_dt();
     }
